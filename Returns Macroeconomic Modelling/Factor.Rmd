@@ -1,0 +1,287 @@
+---
+title: "Factor"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(corrplot)
+library(FactoMineR)
+library(factoextra)
+library("dplyr")
+```
+
+```{r}
+setwd('D:/Documents/Cours M2 MoSEF/Projets M2 MoSEF/Finance Base/')
+table <- read.csv("DF_Taux.csv", header=TRUE,sep=';')
+
+table$Cours_action_ZE=gsub(",", '.', table$Cours_action_ZE, fixed = T)
+table$Inflation_ZE=gsub(",", '.', table$Inflation_ZE, fixed = T)
+table$TX_LT=gsub(",", '.', table$TX_LT, fixed = T)
+table$Var_CAC40=gsub("%", '', table$Var_CAC40, fixed = T)
+table$Var_FTSE100=gsub("%", '', table$Var_FTSE100, fixed = T)
+table$Var_DAX=gsub("%", '', table$Var_DAX, fixed = T)
+table$Var_EUST50=gsub("%", '', table$Var_EUST50, fixed = T)
+table$Var_CAC40=gsub(",", '.', table$Var_CAC40, fixed = T)
+table$Var_FTSE100=gsub(",", '.', table$Var_FTSE100, fixed = T)
+table$Var_DAX=gsub(",", '.', table$Var_DAX, fixed = T)
+table$Var_EUST50=gsub(",", '.', table$Var_EUST50, fixed = T)
+table$TX_change_ZE=gsub(",", '.', table$TX_change_ZE, fixed = T)
+table$PIB_ZE=gsub(",", '.', table$PIB_ZE, fixed = T)
+table$TX_change_ZE=gsub(",", '.', table$TX_change_ZE, fixed = T)
+table$PIB_ZE=gsub(",", '.', table$PIB_ZE, fixed = T)
+table$PIB_G7=gsub(",", '.', table$PIB_G7, fixed = T)
+table$FBCF_EU=gsub(",", '.', table$FBCF_EU, fixed = T)
+table$FIDLEUI.LX.Equity=gsub(",", '.', table$FIDLEUI.LX.Equity, fixed = T)
+
+
+table$Cours_action_ZE= as.numeric(table$Cours_action_ZE)
+table$Inflation_ZE= as.numeric(table$Inflation_ZE)
+table$TX_LT= as.numeric(table$TX_LT)
+table$Var_CAC40= as.numeric(table$Var_CAC40)
+table$Var_FTSE100= as.numeric(table$Var_FTSE100)
+table$Var_DAX= as.numeric(table$Var_DAX)
+table$Var_EUST50= as.numeric(table$Var_EUST50)
+table$TX_change_ZE= as.numeric(table$TX_change_ZE)
+table$PIB_ZE= as.numeric(table$PIB_ZE)
+table$PIB_G7= as.numeric(table$PIB_G7)
+table$FBCF_EU= as.numeric(table$FBCF_EU)
+table$FIDLEUI.LX.Equity= as.numeric(table$FIDLEUI.LX.Equity)
+
+
+table2.active <- table[, 2:12]
+nume=Filter(is.numeric, table2.active)
+```
+
+```{r}
+database <- table
+```
+
+```{r}
+#Histo des valeurs quanti
+
+par(mfrow=c(1,1))#Pour mettre les 6 histos... sur le meme graph
+for(x in seq(1, length(nume)))hist(nume[,x], xlab=names(nume[x]),
+                                   col=rainbow(10), main=names(nume[x]))
+```
+
+```{r}
+M <- cor(nume)
+corrplot(M, method='number')
+summary(nume)
+```
+
+```{r}
+#PCA
+res.pca <- PCA(nume , scale.unit=TRUE,graph=FALSE)
+
+#Calcul des "eigenvalue"
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+
+#Graph de la vairance expliquée par dimension
+fviz_eig(res.pca, addlabels= TRUE , ylim = c(0,40))
+
+#Extraction des résultats
+var <- get_pca_var(res.pca)
+head(var$coord, 5)
+
+#Graph PCA
+fviz_pca_var(res.pca, col.var = "black")
+
+#Corrélation des variables pour les différentes dimensions
+corrplot(var$contrib, is.corr=FALSE)
+
+#Contributions pour les différents axes
+fviz_contrib(res.pca, choice = "var", axes = 1)
+fviz_contrib(res.pca, choice = "var", axes = 2)
+fviz_contrib(res.pca, choice = "var", axes = 1:2)
+```
+
+```{r}
+table2=table
+table$'TIME'=NULL
+
+#intercept <- table$
+#rdt.lm <- lm(I(FIDLEUI.LX.Equity - intercept)~ 0 + ., data=table)
+
+
+rdt.lm <- lm(FIDLEUI.LX.Equity~ ., data=table)
+summary(rdt.lm)
+
+table2['pred']= 10.376818 + 0.101753 * table$Cours_action_ZE + 0.140343 * table$Inflation_ZE + (-1.300540) * table$TX_LT + (-5.437055) * table$TX_change_ZE
+
+#library(ggplot2)
+#par(mfrow=c(1,1))
+plot(table2$TIME, table2$pred,
+     main="Prediction",col='red',
+     ylab="sin(x)")
+lines(table2$TIME, table2$pred,
+      main="Prediction",col='red',
+      ylab="sin(x)")
+plot(table2$TIME, table$FIDLEUI.LX.Equity,
+     main="Fidelity return",col='red',
+     ylab="Prix")
+lines(table2$TIME, table$FIDLEUI.LX.Equity,
+      main="Fidelity return",col='red',
+      ylab="Prix")
+
+lines(table2$TIME, table2$FIDLEUI.LX.Equity,
+     main="Overlaying Graphs",
+     ylab="",
+     type="l",
+     col="blue")
+lines(table2$TIME,table2$pred, col="red")
+legend("topleft",
+       c("FIDLEUI.LX.Equity","pred"),
+       fill=c("blue","red")
+)
+```
+
+```{r}
+table <- database
+```
+
+```{r}
+table$'TIME'=NULL
+table$'Var_CAC40'=NULL
+table$'Var_FTSE100'=NULL
+table$'Var_DAX'=NULL
+```
+
+```{r}
+# Suppression des variables fortement corrélées.
+table2.active <- table[, 2:9]
+
+#PCA
+res.pca <- PCA(table2.active , scale.unit=TRUE,graph=FALSE)
+
+#Calcul des "eigenvalue"
+eig.val <- get_eigenvalue(res.pca)
+eig.val
+
+#Graph de la vairance expliquée par dimension
+fviz_eig(res.pca, addlabels= TRUE , ylim = c(0,40))
+
+#Extraction des résultats
+var <- get_pca_var(res.pca)
+head(var$coord, 5)
+
+#Graph PCA
+fviz_pca_var(res.pca, col.var = "black",repel=TRUE)
+
+#Corrélation des variables pour les différentes dimensions
+corrplot(var$contrib, is.corr=FALSE)
+
+#Contributions pour les différents axes
+fviz_contrib(res.pca, choice = "var", axes = 1)
+fviz_contrib(res.pca, choice = "var", axes = 2)
+fviz_contrib(res.pca, choice = "var", axes = 3)
+fviz_contrib(res.pca, choice = "var", axes = 1:3)
+```
+
+```{r}
+#table2=table
+rdt.lm <- lm(FIDLEUI.LX.Equity~ ., data=table)
+summary(rdt.lm)
+```
+
+
+
+```{r}
+table2['pred_variables_signi']= 10.276661 + 0.102008 * table$Cours_action_ZE   + 0.143172 * table$Inflation_ZE +  -1.297489 * table$TX_LT + -5.344815 * table$TX_change_ZE
+table2['pred_avec_non_signif']= 10.276661 + 0.102008 * table$Cours_action_ZE   + 0.143172 * table$Inflation_ZE +  -1.297489 * table$TX_LT + -5.344815 * table$TX_change_ZE + 0.019479 * table$Var_EUST50 + -0.136919 * table$PIB_ZE + 0.079337 * table$PIB_G7 + 0.037506 * table$FBCF_EU
+```
+
+```{r}
+plot(table2$TIME, table2$pred,
+     main="Prediction",col='red',xlab="Dates",
+     ylab="Prix")
+
+lines(table2$TIME, table2$pred,
+      main="Prediction",col='red',xlab="Dates",
+      ylab="Prix")
+plot(table2$TIME, table2$FIDLEUI.LX.Equity,
+     main="Fidelity return",col='red',xlab="Dates",
+     ylab="Prix")
+lines(table2$TIME, table2$FIDLEUI.LX.Equity,
+      main="Fidelity return",col='red',xlab="Dates",
+      ylab="Prix")
+
+lines(table2$TIME, table2$FIDLEUI.LX.Equity,
+      main="Overlaying Graphs",
+      ylab="",
+      xlab="Dates",
+      type="l",
+      col="blue")
+lines(table2$TIME,table2$pred, col="red")
+lines(table2$TIME,table2$pred_avec_non_signif, col="green")
+legend("topleft",
+       c("FIDLEUI.LX.Equity","pred","pred_avec_non_signif"),
+       fill=c("blue","red","green")
+)
+```
+
+# Rendements
+
+```{r}
+table <- database
+table$Shift <- lag(table$FIDLEUI.LX.Equity ,1,na.pad = TRUE)
+table$Variation = (table$FIDLEUI.LX.Equity - table$Shift) /table$Shift
+```
+
+```{r}
+table2=table
+
+table$'TIME'=NULL
+table$'Var_CAC40'=NULL
+table$'Var_FTSE100'=NULL
+table$'Var_DAX'=NULL
+table$'Shift'=NULL
+# Suppression des variables fortement corrélées
+
+rdt.lm <- lm(Variation~ ., data=table)
+summary(rdt.lm)
+
+# Supression des variables non significatives 
+table2['pred']= -8.810e-02 + 7.495e-03 * table$Var_EUST50 + -4.038e-03 * table$Inflation_ZE + 7.938e-03 * table$TX_LT + -2.064e-02 * table$PIB_ZE + 2.494e-02 * table$PIB_G7
+
+
+#library(ggplot2)
+#par(mfrow=c(1,1))
+plot(table2$TIME, table2$pred,
+     main="Prediction",col='red',
+     xlab="Temps",
+     ylab="Rendement")
+lines(table2$TIME, table2$pred,
+      main="Prediction",col='red',
+      xlab="Temps",
+      ylab="Rendement")
+plot(table2$TIME, table2$Variation,
+     main="Fidelity return",col='red',
+     xlab="Temps",
+     ylab="Rendement")
+lines(table2$TIME, table2$Variation,
+      main="Fidelity return",col='red',
+      xlab="Temps",
+      ylab="Rendement")
+
+lines(table2$TIME, table2$Variation,
+      main="Overlaying Graphs",
+      ylab="",
+      type="l",
+      col="blue")
+lines(table2$TIME,table2$pred, col="red")
+legend("topleft",
+       c("FIDLEUI.LX.Equity","pred"),
+       fill=c("blue","red")
+)
+```
+
+
+
