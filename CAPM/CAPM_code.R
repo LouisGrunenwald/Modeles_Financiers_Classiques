@@ -1,0 +1,104 @@
+library("readxl")
+library("dplyr")
+library("quantmod")
+library("purrr")
+library("PerformanceAnalytics")
+library("timetk")
+library("tidyr")
+library("tidyverse")
+library("tidyquant")
+library("broom.mixed")
+setwd("D:/Documents/Cours M2 MoSEF/Projets M2 MoSEF/Finance Base/")
+
+table <-read_excel("Fidelity Funds - European Growth Fund.xlsx", skip = 11)
+table <- table[3:227, ]
+table$Shift <- lag(table$PX_LAST ,1,na.pad = TRUE)
+table$Rendement = (table$PX_LAST - table$Shift) /table$Shift
+table$'Shift'=NULL
+table$'PX_LAST'=NULL
+table$Rf= as.numeric(table$Rf)
+
+#Extraction de l'ETF sur Yahoo finance
+spy_monthly_xts <- 
+  getSymbols("EXW1.DE", 
+             src = 'yahoo', 
+             from = "2000-12-01", 
+             to = "2019-09-30",
+             auto.assign = TRUE, 
+             warnings = FALSE) %>% 
+  map(~Ad(get(.))) %>% 
+  reduce(merge) %>%
+  `colnames<-`("EXW1.DE") %>% 
+  to.monthly(indexAt = "last", OHLC = FALSE)
+
+market_returns_xts <-
+  Return.calculate(spy_monthly_xts, method = "log") %>% 
+  na.omit()
+
+market_returns_tidy <-
+  market_returns_xts %>% 
+  tk_tbl(preserve_index = TRUE, rename_index = "date") %>% 
+  na.omit() %>%
+  select(date, returns = EXW1.DE)
+
+#table$Dates <- as.Date(table$Dates)
+#table <- table[-c(225,219,108),]
+table <- table[-c(225,1),]
+
+a <- table %>% 
+  mutate(market_returns = market_returns_tidy$returns) 
+a <- a[-1,]
+a$Rf <- a$Rf/100
+
+#Calcul du Bêta du CAPM
+a$cov <- cov(a$Rendement, a$market_returns)
+a$beta <- a$cov/ var(a$market_returns)
+mean(a$beta) # Bêta du CAPM calculé à la mains
+
+# indépendamment, avec une régression classique, on retrouve le Bêta du marché par la modélisation
+beta_dplyr_byhand <-  a %>% 
+  do(model = lm(Rendement ~ market_returns, data = a)) %>% 
+  tidy(model) %>% 
+  mutate(term = c("alpha", "beta"))
+
+beta_dplyr_byhand
+
+a$pred <- 0.004174 + 0.392719 * a$market_returns #On retrouve bien le beta (=0.39)
+
+########  Modélisation par le CAPM   #########
+
+a$`Rm-Rf` <- a$market_returns - a$Rf
+
+
+#Estimation des rendements par le MEDAF
+# Pour cela, on réutilise le bêta déterminé precédement: calculé à la mains ou par modélisation
+a$prévision_MEDAF <- a$Rf + a$beta * a$`Rm-Rf`
+
+#Qualite de l'estimation
+a$diff <- a$Rendement - a$pred
+mean(a$diff)
+StdDev(a$diff)
+
+#Représentation du modèle 
+plot(a$Dates, a$Rendement, ylab = "Rendement", xlab = "Dates")
+lines(a$Dates , a$prévision_MEDAF, col = "red")
+lines(a$Dates , a$Rendement, col = "blue")
+legend("topleft",
+       c("Rendement","pred"),
+       fill=c("blue","red"))
+
+
+#Calcul R²
+sum((a$prévision_MEDAF-mean(a$prévision_MEDAF))^2)/sum((a$Rendement-mean(a$Rendement))^2)
+model=lm(Rendement ~ market_returns, data = a)
+summary(model)  # verif on retrouve bien le même R² que celui calculé
+
+
+#Calcul ratio de Sharp
+Sharp=(mean(a$Rendement)-mean(a$Rf))/StdDev(a$Rendement)
+Sharp
+
+
+#Ce ratio est donc la pente de la CML. Comme proposé par Sharp ce ratio peut être considéré comme une mesure de performance on peut prendre le numérateur comme la prime de risque (positive ou négative) et le dénominateur comme un indicateur de risque. Autrement dit, c'est le rapport entre l'excès de rendement moyen du portefeuille et la mesure totale du risque du portefeuille.
+#Pour exemplifier, le gérant d'un fonds peut regarder si son excès de rendement moyen est suffisant pour compenser un risque plus élevé que celui du portefeuille de marché. Si un portefeuille est bien diversifié, son ratio de Sharp est proche de celui du portefeuille de marché.
+#Plus le ratio de Sharp est élevé mieux c'est.
